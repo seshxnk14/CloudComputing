@@ -1,7 +1,8 @@
 import json
 import boto3
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -9,9 +10,10 @@ sqs = boto3.client('sqs')
 QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/867267088795/Queue1'
 
 def validate_slots(slots):
+    logger.info(f"SLOTS RECEIVED: {json.dumps(slots)}")
     location_slot = slots.get('Location')
     if location_slot and location_slot.get('value'):
-        location = location_slot['value']['interpretedValue']
+        location = location_slot['value'].get('interpretedValue') or location_slot['value'].get('originalValue')
         if location.lower() != 'new york':
             return {
                 'isValid': False,
@@ -20,14 +22,36 @@ def validate_slots(slots):
             }
    
     date_slot = slots.get('DiningDate')
-    if date_slot and date_slot.get('value'):
-        res_date = date_slot['value']['interpretedValue']
-        if datetime.strptime(res_date, '%Y-%m-%d').date() < datetime.today().date():
-            return {
-                'isValid': False,
-                'violatedSlot': 'DiningDate',
-                'message': "I'm sorry, but I can't book for a past date. Please enter a valid date."
-            }
+    time_slot = slots.get('DiningTime')
+    if date_slot and date_slot.get('value') and time_slot and time_slot.get('value'):
+ 
+        res_date = date_slot['value'].get('interpretedValue') or date_slot['value'].get('originalValue')
+        res_time = time_slot['value'].get('interpretedValue') or time_slot['value'].get('originalValue')
+
+        if res_date and res_time:
+            ny_offset = timedelta(hours=-5)
+            now_ny = datetime.now(timezone(ny_offset))
+            today = now_ny.date()
+
+            booking_date = datetime.strptime(res_date, '%Y-%m-%d').date()
+
+            if booking_date < today:
+                return {
+                    'isValid': False,
+                    'violatedSlot': 'DiningDate',
+                    'message': "I'm sorry, but I can't book for a past date. Please enter a valid date."
+                }
+
+
+            if booking_date == today:         
+
+                booking_datetime = datetime.strptime(f"{res_date} {res_time}", '%Y-%m-%d %H:%M').replace(tzinfo=timezone(ny_offset))
+                if booking_datetime < now_ny:
+                    return {
+                        'isValid': False,
+                        'violatedSlot': 'DiningTime',
+                        'message': "That time has already passed today. Please enter a future time."
+                    }
 
     return {'isValid': True}
 
