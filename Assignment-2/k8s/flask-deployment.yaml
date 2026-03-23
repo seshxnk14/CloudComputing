@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-flask
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todo-flask
+  template:
+    metadata:
+      labels:
+        app: todo-flask
+    spec:
+      containers:
+      - name: flask
+        image: seshxnk/assignment-2-flask:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MONGO_HOST
+          value: "mongo"
+        - name: MONGO_PORT
+          value: "27017"
